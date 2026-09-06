@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL Database ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: ba_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: business_analyst
+    ports:
+      - "5433:5432"  # 5433 to avoid conflict with SupportRAGAgent on 5432
+    volumes:
+      - ba_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Business Analyst Agent ──
+  app:
+    build: .
+    container_name: ba_agent
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@postgres:5432/business_analyst
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── pgAdmin (optional, for DB inspection) ──
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ba_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5051:80"  # 5051 to avoid conflict
+    depends_on:
+      - postgres
+    profiles:
+      - admin
+
+volumes:
+  ba_pgdata:
